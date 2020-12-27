@@ -1,4 +1,5 @@
 #include <arv.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <stdio.h>
@@ -29,6 +30,7 @@ static gboolean arv_option_high_priority = FALSE;
 static gboolean arv_option_no_packet_socket = FALSE;
 static char *arv_option_chunks = NULL;
 static unsigned int arv_option_bandwidth_limit = -1;
+static char *arv_option_output_file = NULL;
 
 /* clang-format off */
 static const GOptionEntry arv_option_entries[] =
@@ -50,7 +52,7 @@ static const GOptionEntry arv_option_entries[] =
 		&arv_option_trigger,			"External trigger", NULL
 	},
 	{
-		"software-trigger",			'o', 0, G_OPTION_ARG_DOUBLE,
+		"software-trigger",			'\0', 0, G_OPTION_ARG_DOUBLE,
 		&arv_option_software_trigger,		"Emit software trigger", NULL
 	},
 	{
@@ -138,6 +140,10 @@ static const GOptionEntry arv_option_entries[] =
 		"bandwidth-limit",			'b', 0, G_OPTION_ARG_INT,
 		&arv_option_bandwidth_limit,		"Desired USB3 Vision device bandwidth limit", NULL
 	},
+	{
+		"output",				'o', 0, G_OPTION_ARG_STRING,
+		&arv_option_output_file,		"Output filename", NULL
+	},
 	{ NULL }
 };
 /* clang-format on */
@@ -151,6 +157,7 @@ typedef struct {
 
 	ArvChunkParser *chunk_parser;
 	char **chunks;
+	int fd;
 } ApplicationData;
 
 static gboolean cancel = FALSE;
@@ -168,7 +175,8 @@ new_buffer_cb (ArvStream *stream, ApplicationData *data)
 
 	buffer = arv_stream_try_pop_buffer (stream);
 	if (buffer != NULL) {
-		if (arv_buffer_get_status (buffer) == ARV_BUFFER_STATUS_SUCCESS) {
+		gboolean success = arv_buffer_get_status (buffer) == ARV_BUFFER_STATUS_SUCCESS;
+		if (success) {
 			size_t size = 0;
 			data->buffer_count++;
 			arv_buffer_get_data (buffer, &size);
@@ -200,7 +208,16 @@ new_buffer_cb (ArvStream *stream, ApplicationData *data)
 			}
 		}
 
-		/* Image processing here */
+		/* write out the frame */
+		size_t size;
+		const char *frame = arv_buffer_get_data (buffer, &size);
+		if (success && frame != NULL && data->fd != -1) {
+			int n = write(data->fd, frame, size);
+			if (n == -1) {
+				g_print("File write error\n");
+				exit(1);
+			}
+		}
 
 		arv_stream_push_buffer (stream, buffer);
 	}
@@ -313,6 +330,17 @@ main (int argc, char **argv)
 		guint64 n_underruns;
 		int gain;
 		guint software_trigger_source = 0;
+
+		data.fd = -1;
+
+		if (arv_option_output_file != NULL) {
+			data.fd = open(arv_option_output_file, O_WRONLY|O_CREAT|O_TRUNC, 0600);
+			if (data.fd == -1) {
+				g_print("Cannot open output file %s\n", arv_option_output_file);
+			}
+		} else {
+			g_print("No output file specified, not saving output\n");
+		}
 
 		if (arv_option_chunks != NULL) {
 			char *striped_chunks;

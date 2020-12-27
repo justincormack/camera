@@ -1,0 +1,37 @@
+
+export PKG_CONFIG_PATH=/opt/homebrew/Cellar/zlib/1.2.11/lib/pkgconfig/:/opt/homebrew/opt/libxml2/lib/pkgconfig:/opt/homebrew/Cellar/gtk+3/3.24.24/lib/pkgconfig:/opt/homebrew/opt/expat/lib/pkgconfig
+
+
+redo:
+meson setup --wipe build
+
+
+arv-tool control AcquisitionFrameRate=30
+iactually doesnt work need
+arv-tool control AcquisitionFrameRateMode=On AcquisitionFrameRate=30 CurrentAcquisitionFrameRate
+Should add this into code...
+
+the arv-viewer is segfaulting with pointer authentication issues
+
+the arv-camera-test program seems to work nicely!
+doesn't save frames
+
+working but framerate not right
+exposure 10000 to 14000 about right (in us)
+./camera -f 30 -e 13500 --output test2.raw
+
+use
+/Applications/VLC.app/Contents/MacOS/VLC --demux rawvideo --rawvid-fps 30 --rawvid-width 1920 --rawvid-height 1200 --rawvid-chroma GREY test.raw
+to play
+
+convert to mp4
+
+/Applications/VLC.app/Contents/MacOS/VLC -I dummy --demux rawvideo --rawvid-fps 30 --rawvid-width 1920 --rawvid-height 1200 --rawvid-chroma GREY test2.raw '--sout=#transcode{vcodec=h264,vb=1024}:std{access=file,mux=ps,dst=out.mp4}' vlc://quit
+
+
+ffmpeg
+ffplay -video_size 1920x1200 -pix_fmt gray -f rawvideo -framerate 30 test2.raw
+
+good quality
+ffmpeg -video_size 1920x1200 -pix_fmt gray -f rawvideo -framerate 30 -i test2.raw -b 8000000 out1.mp4
+
